@@ -1,0 +1,783 @@
+---
+title: "Study Fleet Manuscript Pull and Analysis"
+author: "Andy Jones"
+date: "07/07/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+##Loading packages
+Loading the many packages that are used somewhere in this script. This script has evolved to do many things and many of these are only need in one or two places.
+
+```{r Loading packages}
+#loading needed packages
+#Not all of these are needed right away
+library(tidyverse)
+library(ROracle) #database
+library(lubridate) #dates
+library(MASS)
+library(sf)
+
+```
+
+##Load pulled data from file
+```{r}
+#TO BE ADDED
+
+
+```
+
+##Getting into the analysis
+
+```{r}
+plot_data_comb_ves %>% filter(source=='crb') %>% dplyr::select(YEAR,trip_id) %>% distinct() %>% group_by(YEAR) %>% tally()
+
+trip_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(YEAR,SOURCE,TRIP_ID) %>% distinct() %>% group_by(YEAR,SOURCE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n)
+
+ves_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(YEAR,SOURCE,VESSEL_PERMIT_NUM) %>% distinct() %>% group_by(YEAR,SOURCE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n)
+
+effort_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(TRIP_ID,YEAR) %>% left_join(., crpp_effort %>% mutate(effort_id=paste(TRIP_ID,EFFORT_NUM))) %>% dplyr::select(YEAR,SOURCE,effort_id) %>% distinct() %>% group_by(YEAR,SOURCE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n) %>% drop_na(SOURCE)
+
+gear_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(TRIP_ID,YEAR) %>% left_join(., crpp_effort %>% mutate(effort_id=paste(TRIP_ID,EFFORT_NUM))) %>% dplyr::select(YEAR,GC_GEAR_CODE,TRIP_ID) %>% distinct() %>% 
+  mutate(GC_GEAR_CODE=fct_lump_n(GC_GEAR_CODE,n=1)) %>%
+  group_by(YEAR,GC_GEAR_CODE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n) %>% drop_na(GC_GEAR_CODE)
+
+
+library(gt)
+bind_rows(tibble(Metric='Number of Vessels',ves_counts),tibble(Metric='Number of Trips',trip_counts),tibble(Metric='Number of Efforts',effort_counts)) %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>% group_by(Metric) %>% gt() %>% tab_header(title = "Metrics of Study Fleet Participation", subtitle ="From 2007 - 2020") #%>%
+
+gear_counts %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>%
+  mutate(GC_GEAR_CODE = as.character(GC_GEAR_CODE)) %>%
+  mutate(GC_GEAR_CODE=case_when(GC_GEAR_CODE=="092OTF" ~ 'Otter trawl fish',TRUE ~ GC_GEAR_CODE)) %>%
+  rename('Gear type'=GC_GEAR_CODE) %>%
+  gt() %>% 
+  tab_header(title = "Study Fleet Participation by Gear Type",
+             subtitle ="From 2007 - 2020")
+#    data_color(columns=vars(),
+#             colors = scales::col_numeric(
+#               palette = as.character(paletteer::paletteer_d(palette = "ggsci::red_material")),
+#               domain = NULL)) 
+
+trip_list %>%  mutate(YEAR=year(SAIL_DATE_LCL)) %>% group_by(YEAR,REPORT_SOURCE) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  mutate(REPORT_SOURCE2=case_when(REPORT_SOURCE=='HBH'~'Haul-level',TRUE ~ 'Trip-level')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,color=REPORT_SOURCE2)) + geom_point(size=4) + geom_path(size=2) +
+  labs(x='Year',y='Number of trips',color='Report type') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  scale_color_manual(values=c('#352A87','#FBCD2D'))
+
+
+a <- plot_data_comb_ves %>%
+  dplyr::select(trip_id,YEAR,source) %>%
+  distinct() %>%
+   group_by(YEAR,source) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,color=source2)) + geom_point(size=4) + geom_path(size=2) +
+  labs(x='Year',y='Number of trips',color='Data source') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+    scale_color_manual(values=c('#352A87','#FBCD2D'))
+
+b <- plot_data_comb_ves %>%
+  dplyr::select(haul_id,YEAR,source) %>%
+  distinct() %>%
+   group_by(YEAR,source) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,color=source2)) + geom_point(size=4) + geom_path(size=2) +
+  labs(x='Year',y='Number of hauls',color='Data source') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+    scale_color_manual(values=c('#352A87','#FBCD2D'))
+
+library(patchwork)
+a/b + plot_annotation(tag_levels = 'A')
+
+```
+
+```{r}
+library(pals)
+
+target_haul_trend <- plot_data_comb_ves %>%
+  mutate(target=as.character(target)) %>%
+  mutate(target=case_when(target=='LOLIGO SQUID' ~ 'LONGFIN SQUID',target=='ILLEX SQUID'~'SHORTFIN SQUID',TRUE ~ target)) %>%
+  filter(source=='crb') %>%
+  drop_na(target) %>%
+  #mutate(target=case_when(is.na(target) ~ 'Unknown',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  dplyr::select(haul_id,YEAR,target) %>%
+  distinct() %>%
+  group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  #mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,colour=target)) + geom_point(size=4) + geom_path(size=2) + 
+  labs(x='Year',y='Number of hauls',color='Target species') +
+  scale_x_continuous(breaks=c(2007:2020)) + 
+  theme_bw() +
+  theme(legend.position = 'None') +
+  scale_colour_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+target_haul_prop <- plot_data_comb_ves %>%
+  mutate(target=as.character(target)) %>%
+  mutate(target=case_when(target=='LOLIGO SQUID' ~ 'LONGFIN SQUID',target=='ILLEX SQUID'~'SHORTFIN SQUID',TRUE ~ target)) %>%
+  filter(source=='crb') %>%
+  drop_na(target) %>%
+  #mutate(target=case_when(is.na(target) ~ 'Unknown',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  dplyr::select(haul_id,YEAR,target) %>%
+  distinct() %>%
+  group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  #mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,fill=target)) + geom_col(position='fill') +
+  labs(x='Year',y='Number of hauls',fill='Target species') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  scale_fill_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+target_trip_trend <- plot_data_comb_ves %>%
+  mutate(target=as.character(target)) %>%
+  mutate(target=case_when(target=='LOLIGO SQUID' ~ 'LONGFIN SQUID',target=='ILLEX SQUID'~'SHORTFIN SQUID',TRUE ~ target)) %>%
+  filter(source=='crb') %>%
+  drop_na(target) %>%
+  #mutate(target=case_when(is.na(target) ~ 'Unknown',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  dplyr::select(trip_id,YEAR,target) %>%
+  distinct() %>%
+  group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  #mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,colour=target)) + geom_point(size=4) + geom_path(size=2) + 
+  labs(x='Year',y='Number of trips',color='Target species') +
+  scale_x_continuous(breaks=c(2007:2020)) +
+    theme_bw() +
+  theme(legend.position = 'None') +
+  scale_colour_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+target_trip_prop <- plot_data_comb_ves %>%
+  mutate(target=as.character(target)) %>%
+  mutate(target=case_when(target=='LOLIGO SQUID' ~ 'LONGFIN SQUID',target=='ILLEX SQUID'~'SHORTFIN SQUID',TRUE ~ target)) %>%
+  filter(source=='crb') %>%
+  drop_na(target) %>%
+  #mutate(target=case_when(is.na(target) ~ 'Unknown',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  dplyr::select(trip_id,YEAR,target) %>%
+  distinct() %>%
+  group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  #mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,fill=target)) + geom_col(position='fill') +
+  labs(x='Year',y='Number of trips',fill='Target species') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  scale_fill_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+target_vessel_trend <- plot_data_comb_ves %>%
+  mutate(target=as.character(target)) %>%
+  mutate(target=case_when(target=='LOLIGO SQUID' ~ 'LONGFIN SQUID',target=='ILLEX SQUID'~'SHORTFIN SQUID',TRUE ~ target)) %>%
+  filter(source=='crb') %>%
+  drop_na(target) %>%
+  #mutate(target=case_when(is.na(target) ~ 'Unknown',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  dplyr::select(permit,YEAR,target) %>%
+  distinct() %>%
+  group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  #mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,colour=target)) + geom_point(size=4) + geom_path(size=2) + 
+  labs(x='Year',y='Number of vessels',color='Target species') +
+  scale_x_continuous(breaks=c(2007:2020)) +
+    theme_bw() +
+  theme(legend.position = 'None') +
+  scale_colour_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+target_vessel_prop <- plot_data_comb_ves %>%
+  mutate(target=as.character(target)) %>%
+  mutate(target=case_when(target=='LOLIGO SQUID' ~ 'LONGFIN SQUID',target=='ILLEX SQUID'~'SHORTFIN SQUID',TRUE ~ target)) %>%
+  filter(source=='crb') %>%
+  drop_na(target) %>%
+  #mutate(target=case_when(is.na(target) ~ 'Unknown',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  dplyr::select(permit,YEAR,target) %>%
+  distinct() %>%
+  group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR > 2006, YEAR < 2021) %>%
+  #mutate(source2=case_when(source=='obs'~'Observer',TRUE ~ 'Study Fleet')) %>%
+  #pivot_wider(names_from = YEAR,values_from = n)
+  ggplot(aes(x=YEAR,y=n,fill=target)) + geom_col(position='fill') +
+  labs(x='Year',y='Number of vessels',fill='Target species') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  scale_fill_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+((target_vessel_trend + target_trip_trend + target_haul_trend) / (target_vessel_prop + target_trip_prop + target_haul_prop)) +
+  plot_layout(guides = "collect") + plot_annotation(tag_levels = 'A') + theme(legend.position = 'bottom')
+
+
+```
+
+
+```{r include=FALSE setting up db connection}
+######
+#Once loaded packages edit your user name and database specifics and run from here down
+#You have to put in your user name
+usr <- .rs.askForPassword('username')
+#Asks for you pswd in pop up (no need to edit here)
+pswd <- .rs.askForPassword('Password')
+
+#Database specifics
+drv <- dbDriver("Oracle")
+host <- "sole.nefsc.noaa.gov"
+port <- 1526
+sid <- "sole"
+
+#Putting all of that together
+connect.string <- paste(
+  "(DESCRIPTION=",
+  "(ADDRESS=(PROTOCOL=tcp)(HOST=", host, ")(PORT=", port, "))",
+  "(CONNECT_DATA=(SID=", sid, ")))", sep = "")
+
+## Use username/password authentication.
+con <- dbConnect(drv, username = usr, password = pswd,
+                 dbname = connect.string)
+
+```
+
+```{r}
+#Pulling dealer data
+dbGetQuery(con,"SET ROLE ALL")
+
+years <- c(2007:2020)
+cfders_spp <- NULL
+#Then dealer data
+for(i in 1:length(years)) {
+cfders_spp[[i]] <- dbGetQuery(con,paste("SELECT YEAR,NEGEAR,NESPP4,AREA,SPECIES_ITIS,SPPLNDLB FROM CFDBS.CFDERS",years[i],sep=''))}
+
+plot_data_comb %>%
+  filter(source=='crb') %>%
+  drop_na(target) %>%
+  #mutate(target=case_when(is.na(target) ~ 'Unknown',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>% .$target %>% unique()
+
+do.call(rbind.data.frame,cfders_spp) %>%
+  filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
+  mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>%
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) %>% 
+  ggplot(aes(x=YEAR,y=SPPLNDLB,colour=SPECIES_ITIS)) + geom_point(size=2) + geom_line(size=1.2) +
+  labs(x='Year',y='Total Landed Weight (lbs)') + theme_bw()
+
+dealer_sum <- do.call(rbind.data.frame,cfders_spp) %>%
+  filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
+  mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>%
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+
+study_fleet_sum <- pulled_data_edit_cf %>%
+  filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
+  group_by(YEAR,SPECIES_ITIS) %>%
+  dplyr::summarise(SUM_HAIL_AMOUNT_LB=sum(HAIL_AMOUNT_LB,na.rm=TRUE))
+
+
+
+colors <- c("Prop. in SF" = "Black", "Total trend" = "red")
+
+library(scales)
+
+dealer_sum %>% inner_join(.,study_fleet_sum) %>% mutate(prop=SUM_HAIL_AMOUNT_LB/SPPLNDLB) %>%
+  left_join(.,OBSPEC) %>%
+  filter(COMNAME!='SQUID EGGS, ATL LONG-FIN',COMNAME!='FLOUNDER, AMERICAN PLAICE') %>%
+  group_by(COMNAME) %>%
+  mutate(SPPLNDLB=rescale(SPPLNDLB)) %>%
+  ggplot() + 
+  geom_point(aes(x=YEAR,y=prop,color='Prop. in SF'),colour='#352A87', size=2) + 
+  geom_line(aes(x=YEAR,y=prop,color='Prop. in SF'),colour='#352A87', size=1.2) +
+  geom_point(aes(x=YEAR,y=SPPLNDLB/5,color='Total trend'),colour='#FBCD2D', size=2) + 
+  geom_line(aes(x=YEAR,y=SPPLNDLB/5,color='Total trend'),colour='#FBCD2D', size=1.2) +
+  labs(x='Year',y='Proportion of total species landings (Purple)') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  #theme(legend.position = 'None') +
+  #scale_fill_manual(values=as.vector(parula(8))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + facet_wrap(~COMNAME) +
+  scale_y_continuous(sec.axis = sec_axis(~.*5, name = "Total landings trend (Yellow)")) +
+  scale_color_manual(values = colors) +
+  theme(axis.line.y.right = element_line(color = "#FBCD2D"), 
+       axis.ticks.y.right = element_line(color = "#FBCD2D"),
+            # I can modify text color but not sure about line?
+            axis.text.y.right = element_text(color = "#FBCD2D"),
+       #axis.title.y.right = element_text(color="#FBCD2D"),
+       axis.line.y.left = element_line(color = "#352A87"), 
+       axis.ticks.y.left = element_line(color = "#352A87"),
+            # I can modify text color but not sure about line?
+            axis.text.y.left = element_text(color = "#352A87"),
+       #axis.title.y.left = element_text(color="#352A87"),
+       )
+
+show_col(parula(10))
+
+
+```
+
+
+```{r}
+vessels_of_interest <- pulled_data_edit_cf$VESSEL_PERMIT_NUM %>% unique()
+
+participation_data <- pulled_data_edit_cf %>% dplyr::select(YEAR,VESSEL_NAME,VESSEL_PERMIT_NUM,TRIP_ID) %>% 
+  mutate(VESSEL_NAME = toupper(VESSEL_NAME)) %>%
+  distinct() %>% group_by(YEAR,VESSEL_NAME,VESSEL_PERMIT_NUM) %>% tally() %>%
+  filter(YEAR  > 2006) %>% 
+  mutate(year_sum=sum(n)) %>%
+  ungroup() %>%
+  group_by(VESSEL_NAME,VESSEL_PERMIT_NUM) %>% 
+  mutate(sum=sum(n)) %>%
+  mutate(min_year=min(YEAR)) %>%
+  #filter(sum > 500) %>%
+  arrange(-sum)
+
+VESSEL_NUMBER <- participation_data %>% ungroup() %>% 
+  arrange(year_sum) %>% dplyr::select(VESSEL_NAME,VESSEL_PERMIT_NUM) %>%
+  distinct() %>% mutate(VESSEL_NUM=row_number())
+
+VESSEL_PORT <- VESSEL_NUMBER %>%
+  left_join(.,vessel_info %>% mutate(VP_NUM=as.character(VP_NUM)) %>%
+              filter(VP_NUM %in% vessels_of_interest,AP_YEAR>2006) %>%
+              ungroup() %>%
+              dplyr::select(VES_NAME,VP_NUM,PPST) %>% distinct() %>% group_by(VP_NUM,VES_NAME) %>% slice(1), by=c("VESSEL_PERMIT_NUM"="VP_NUM","VESSEL_NAME"="VES_NAME"))
+
+participation_data %>% left_join(VESSEL_NUMBER) %>%
+  ggplot(aes(x=YEAR,y=reorder(VESSEL_NUM,-year_sum))) + geom_line(alpha=0.25) + geom_point(alpha=0.75,aes(size=n)) +
+  labs(x='Year',y='Vessels',size='Number of trips') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.75, hjust=1))
+
+participation_data %>% left_join(VESSEL_NUMBER) %>%
+  ggplot(aes(x=YEAR,y=reorder(VESSEL_NUM,-year_sum))) + geom_tile(aes(fill=n),colour='Gray') +
+  labs(x='Year',y='Vessels',fill='Number of trips') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.75, hjust=1)) +
+  scale_fill_gradient(low=as.vector(parula(8)[1]),high=as.vector(parula(8)[8]))
+
+participation_data %>% left_join(VESSEL_PORT) %>% filter(YEAR < 2021) %>%
+  ungroup() %>%
+  mutate(Port=fct_lump(PPST,3)) %>%
+  drop_na() %>%
+  ggplot(aes(x=YEAR,y=reorder(VESSEL_NAME,-min_year))) + geom_tile(aes(fill=n),colour='Gray') +
+  labs(x='Year',y='Vessels',fill='Number of trips') +
+  scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.75, hjust=1),
+        axis.text.y = element_text(size=6),
+        legend.position = 'bottom') +
+  facet_wrap(~Port,scales='free_y') +
+  scale_fill_gradient(low=as.vector(brewer.blues(3)[1]),high=as.vector(brewer.blues(3)[3]))
+
+
+
+
+```
+
+```{r}
+pulled_data_edit_cf %>%
+  filter(SPECIES_ITIS %in% c('172933'),FA_AREA_CODE > 400) %>%
+  group_by(YEAR,SPECIES_ITIS) %>%
+  dplyr::summarise(SUM_HAIL_AMOUNT_LB=sum(HAIL_AMOUNT_LB,na.rm=TRUE)) %>%
+  ungroup() %>%
+  #mutate(VESSEL_PERMIT_NUM=fct_lump_n(VESSEL_PERMIT_NUM,10)) %>%
+  ggplot(aes(x=YEAR,y=SUM_HAIL_AMOUNT_LB)) + geom_point() + geom_path()
+
+atl <- marmap::getNOAA.bathy(-76.5,-66.5, 34.5, 45, res = 1, keep=TRUE)
+
+ggplot() +
+          geom_contour(data = atl,
+                       aes(x=x, y=y, z=z),
+                       breaks=c(0,-1,-10,-100,-500,-1000,-1500,-2000),
+                       size=c(0.3),
+                       colour="black",alpha=0.5) +
+          geom_point(data=pulled_data_edit_cf %>% filter(SPECIES_ITIS %in% c('172933'),VESSEL_NAME=='TITAN',YEAR==2015),
+                     aes(y=START_HAUL_LAT,
+                     x=START_HAUL_LON),binwidth = c(0.1666666,0.1666666),alpha=0.5,shape=2,colour='Red') +
+          geom_point(data=pulled_data_edit_cf %>% filter(SPECIES_ITIS %in% c('172933'),VESSEL_NAME!='TITAN'),
+                     aes(y=START_HAUL_LAT,
+                     x=START_HAUL_LON,colour = HAIL_AMOUNT_LB),binwidth = c(0.1666666,0.1666666),alpha=0.5) +
+          #geom_polygon(data = usa, aes(x=long, y = lat, group = group)) +
+          #geom_polygon(data = canada, aes(x=long, y = lat, group = group)) +
+          #coord_sf(xlim = lons, ylim = lats,crs="+proj=longlat +datum=WGS84") +
+          scale_fill_viridis_c(breaks=c(1,10,100,1000,10000,100000,1000000)) +
+          #labs(x='Longitude',y='Latitude',fill='Count',title=paste('Number data points from:',min(input$year),'to',max(input$year)),
+               #subtitle=paste('Data binned by 5 min squares for quarters',min(input$month),'to',max(input$month)))
+          labs(x='Longitude',y='Latitude',fill='Weight')
+
+  
+
+
+```
+
+```{r}
+gte_effort <- dbGetQuery(con,"select * from NERS.GTE_EFFORTS")
+
+plot_data_comb_ves_gte <- plot_data_comb_ves %>% 
+  left_join(.,gte_effort %>%
+            mutate(GTE_DATA='YES') %>%
+            dplyr::select(GTE_DATA,TRIP_ID,EFFORT_NUM,MEAN_TEMP_C,
+                          CALC_DUR_HR,CALC_DIST_NM,MEAN_DPTH_M,GTE_CODE) %>%
+            mutate(trip_id=as.character(TRIP_ID),
+                                    EFFORT_NUM=as.numeric(as.character(EFFORT_NUM)),
+                                    haul_id=paste(trip_id,EFFORT_NUM)))
+
+
+lons = c(-76, -66)
+lats = c(35, 44)
+
+library(map_data)
+#Pulling state polygons for coastlines
+usa <- ggplot2::map_data('state') %>% 
+  filter(region %in% c("maine", "vermont", "new hampshire", 
+                       "massachusetts", "connecticut", "rhode island",
+                       "new york", "pennsylvania", "new jersey", 
+                       "delaware", "district of columbia", "maryland",
+                       "west virginia", "virginia", "north carolina"))
+
+canada <- map_data("worldHires", "Canada")
+
+atl <- marmap::getNOAA.bathy(-78,-65, 34, 46, res = 3, keep=TRUE)
+lons = c(-75, -67)
+lats = c(37, 44)
+
+map_gte <- plot_data_comb_ves_gte %>% filter(GTE_DATA=='YES') %>% filter(YEAR>2009,YEAR<2021) %>%
+ggplot() +
+          geom_contour(data = atl,
+                       aes(x=x, y=y, z=z),
+                       breaks=c(0,-1,-10,-100,-500,-1000,-1500,-2000),
+                       size=c(0.3),
+                       colour="black",alpha=0.5) +
+          stat_bin_2d(aes(y=start_lat,
+                          x=start_lon,fill = stat(count)),binwidth = c(0.1666666,0.1666666),alpha=0.5) +
+          geom_polygon(data = usa, aes(x=long, y = lat, group = group)) +
+          #geom_polygon(data = canada, aes(x=long, y = lat, group = group)) +
+          coord_sf(xlim = lons, ylim = lats,crs="+proj=longlat +datum=WGS84") +
+          scale_fill_gradient(low=as.vector(parula(8)[1]),high=as.vector(parula(8)[8]),
+                              trans='log',breaks=c(1,10,100,1000,10000,100000,1000000)) +
+          facet_wrap(~YEAR) +
+          #scale_fill_viridis_c() +
+          #labs(x='Longitude',y='Latitude',fill='Count',title=paste('Number data points from:',min(input$year),'to',max(input$year)),
+               #subtitle=paste('Data binned by 5 min squares for quarters',min(input$month),'to',max(input$month)))
+          labs(x='Longitude',y='Latitude',fill='Count')
+
+library(pals)
+library(patchwork)
+
+gte_trends <- plot_data_comb_ves_gte %>% filter(GTE_DATA=='YES') %>% 
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  drop_na(target) %>%
+  dplyr::select(haul_id,YEAR,target) %>% distinct() %>% group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR>2009) %>% ggplot(aes(x=YEAR,y=n,colour=target)) + geom_point(size=2) + geom_line(size=1.2) +
+    labs(x='Year',y='Number of oceanographic records',colour='Target species') +
+  scale_x_continuous(breaks=c(2010:2020)) + theme_bw() +
+  scale_colour_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  
+
+map_gte / gte_trends + plot_annotation(tag_levels = 'A')
+
+```
+
+```{r}
+library(ggnewscale)
+library(mapdata)
+library(sf)
+library(stars)
+library(raster)
+
+gf_closed_areas <- st_read('C:/Users/andrew.jones/Downloads/Groundfish_Closure_Areas_20180409_0/Groundfish_Closure_Areas')
+gf_closed_areas_2 <- st_read('C:/Users/andrew.jones/Downloads/habitat_management_areas_20180409_(2)/Habitat_Management_Areas')
+gf_closed_areas_3 <- st_read('C:/Users/andrew.jones/Downloads/nantucket-lightship-closed-area-exemption-areas-20160501-noaa-garfo/Nantucket_Lightship_Closed_Area_Exemption_Areas')
+us_eez <- st_read('C:/Users/andrew.jones/Downloads/USMaritimeLimitsAndBoundariesSHP')
+
+plot_data_comb_map <- plot_data_comb_ves %>% filter(str_sub(gear_code_vtr,1,2)=='OT')# %>% group_by(gear_code_vtr,source) %>%
+
+atl <- marmap::getNOAA.bathy(-76.5,-65, 34.5, 45, res = 1, keep=TRUE)
+lons = c(-75.5, -66)
+lats = c(35.5, 44)
+
+reg = map_data("world2Hires")
+reg = subset(reg, region %in% c('Canada', 'USA'))
+reg$long = (360 - reg$long)*-1
+
+boxsize <- 10
+xmn <- -77
+xmx <- -57
+ymn <- 30
+ymx <- 50
+bmin <- 3
+nrow <- (ymx-ymn)*60/boxsize
+ncol <- (xmx-xmn)*60/boxsize
+crs <- CRS("+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0")
+
+r = raster(nrow=(ymx-ymn)*60/boxsize
+	           , ncol= (xmx-xmn)*60/boxsize
+	           , xmn = xmn
+	           , xmx = xmx
+	           , ymn = ymn
+	           , ymx = ymx
+	           , crs = crs) 
+
+coordinates(plot_data_comb_map) <- c('start_lon','start_lat')
+plot_data_comb_map@proj4string = CRS("+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0")
+
+#####
+
+crb_plot_data_comb_map_raster_weight <- rasterize(plot_data_comb_map %>% st_as_sf() %>% filter(source=='crb'), r, 'TOT_CATCH',fun=sum)
+crb_plot_data_comb_map_raster_permits <- rasterize(plot_data_comb_map %>% st_as_sf() %>% filter(source=='crb'), r, 'permit', fun=function(x, ...) length(unique(x)))
+crb_plot_data_comb_map_raster_efforts <- rasterize(plot_data_comb_map %>% st_as_sf() %>% filter(source=='crb'), r, 'haul_id', fun=function(x, ...) length(unique(x)))
+crb_plot_data_comb_map_raster_trips <- rasterize(plot_data_comb_map %>% st_as_sf() %>% filter(source=='crb'), r, 'trip_id', fun=function(x, ...) length(unique(x)))
+
+#plot_data_comb_map_raster_weight %>% plot()
+
+#stack(plot_data_comb_map_raster_weight,plot_data_comb_map_raster_permits,plot_data_comb_map_raster_efforts) %>% plot()
+
+crb_stack <- stack(crb_plot_data_comb_map_raster_efforts,crb_plot_data_comb_map_raster_permits,crb_plot_data_comb_map_raster_weight,crb_plot_data_comb_map_raster_trips) %>% st_as_stars(values=layer) %>% st_as_sf() %>% filter(layer.2>3) %>% drop_na(layer.1)
+
+crb_plot_1 <- stack(crb_plot_data_comb_map_raster_efforts,crb_plot_data_comb_map_raster_permits) %>% st_as_stars(values=layer) %>% st_as_sf() %>% filter(layer.2>3) %>% drop_na(layer.1) %>% ggplot() + geom_sf(aes(fill=layer.1))
+
+#plot_data_comb_map_raster_weight %>% plot()
+
+crb_plot_2 <- crb_plot_data_comb_map_raster_permits %>% st_as_stars(values=layer) %>% st_as_sf() %>% filter(layer>3) %>% ggplot() + geom_sf(aes(fill=layer))
+
+crb_plot_1 + crb_plot_2
+
+#####
+
+#####
+
+obs_plot_data_comb_map_raster_weight <- rasterize(plot_data_comb_map %>% st_as_sf() %>% filter(source=='obs'), r, 'TOT_CATCH',fun=sum)
+obs_plot_data_comb_map_raster_permits <- rasterize(plot_data_comb_map %>% st_as_sf() %>% filter(source=='obs'), r, 'permit', fun=function(x, ...) length(unique(x)))
+obs_plot_data_comb_map_raster_efforts <- rasterize(plot_data_comb_map %>% st_as_sf() %>% filter(source=='obs'), r, 'haul_id', fun=function(x, ...) length(unique(x)))
+
+#plot_data_comb_map_raster_weight %>% plot()
+
+#stack(plot_data_comb_map_raster_weight,plot_data_comb_map_raster_permits,plot_data_comb_map_raster_efforts) %>% plot()
+
+obs_stack <- stack(obs_plot_data_comb_map_raster_efforts,obs_plot_data_comb_map_raster_permits) %>% st_as_stars(values=layer) %>% st_as_sf() %>% filter(layer.2>3) %>% drop_na(layer.1)
+
+obs_plot_1 <- stack(obs_plot_data_comb_map_raster_efforts,obs_plot_data_comb_map_raster_permits) %>% st_as_stars(values=layer) %>% st_as_sf() %>% filter(layer.2<3) %>% drop_na(layer.1) %>% ggplot() + geom_sf(aes(fill=layer.2))
+
+#plot_data_comb_map_raster_weight %>% plot()
+
+obs_plot_2 <- obs_plot_data_comb_map_raster_permits %>% st_as_stars(values=layer) %>% st_as_sf() %>% filter(layer>3) %>% ggplot() + geom_sf(aes(fill=layer))
+
+crb_plot_1 + crb_plot_2
+
+
+observer <- ggplot() +
+  #geom_sf(data=gf_closed_areas,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_2,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_3,alpha=0.25,fill='Green') +
+  #geom_raster(data=atl, aes(x=x, y=y,fill = z), interpolate = TRUE,alpha=0.5, show.legend = FALSE) +
+  #new_scale_fill() +
+  #scale_fill_viridis(option='magma',direction = 1) +
+  #scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  scale_fill_gradientn(colours = gnuplot(10),guide='colourbar',trans='log10') +
+    #stat_bin_2d(data=plot_data_comb_map_ves %>%
+                #filter(source=='crb'),
+  #aes(x=start_lon,y=start_lat),color = "grey60",alpha=0.75, binwidth = c(0.1666,0.1666)) +
+  geom_sf(data=obs_stack,aes(fill=layer.1)) +
+  geom_polygon(data = reg, aes(x=long, y = lat, group = group),fill='grey60',colour='dark gray') +
+  geom_contour(data = atl,
+                aes(x=x, y=y, z=z),
+                breaks=c(-50,-100,-1000),
+                size=c(0.5),
+                colour="black",alpha=0.5) +
+  geom_sf(data=us_eez,alpha=0.25,fill='Green',size=1.2) +
+  #Setting the colors and breaks for the scale
+  coord_sf(xlim = lons, ylim = lats,crs="+proj=longlat +datum=NAD83") +
+    labs(x='Longitude',y='Latitude',fill='Total #\nhauls'#,
+      #title='Spatial distribution of Cooperative Research vs Observer records',
+      #subtitle='January 2010 - January 2019 for Trawl Gears'
+      ) + 
+  theme_bw() +
+  theme(legend.position = c(0.85, 0.25))
+  #facet_wrap(~source)
+
+study_fleet <- ggplot() +
+  #geom_sf(data=gf_closed_areas,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_2,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_3,alpha=0.25,fill='Green') +
+  #geom_raster(data=atl, aes(x=x, y=y,fill = z), interpolate = TRUE,alpha=0.5, show.legend = FALSE) +
+  #new_scale_fill() +
+  #scale_fill_viridis(option='magma',direction = 1) +
+  #scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  #stat_bin_2d(data=plot_data_comb_map %>%
+                #filter(source=='crb'),
+  #aes(x=start_lon,y=start_lat),color = "grey60",alpha=0.75, binwidth = c(0.1666,0.1666)) +
+  geom_sf(data=crb_stack,aes(fill=layer.1)) +
+  geom_polygon(data = reg, aes(x=long, y = lat, group = group),fill='grey60',colour='dark gray') +
+  geom_contour(data = atl,
+                aes(x=x, y=y, z=z),
+                breaks=c(-50,-100,-1000),
+                size=c(0.5),
+                colour="black",alpha=0.5) +
+  geom_sf(data=us_eez,alpha=0.25,fill='Green',size=1.2) +
+  #Setting the colors and breaks for the scale
+  coord_sf(xlim = lons, ylim = lats,crs="+proj=longlat +datum=WGS84") +
+    labs(x='Longitude',y='Latitude',fill='Total #\nhauls'#,
+      #title='Spatial distribution of Cooperative Research vs Observer records',
+      #subtitle='January 2010 - January 2019 for Trawl Gears'
+      ) + 
+  theme_bw() +
+  theme(legend.position = c(0.85, 0.25))
+
+
+study_fleet_w <- ggplot() +
+  #geom_sf(data=gf_closed_areas,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_2,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_3,alpha=0.25,fill='Green') +
+  #geom_raster(data=atl, aes(x=x, y=y,fill = z), interpolate = TRUE,alpha=0.5, show.legend = FALSE) +
+  #new_scale_fill() +
+  #scale_fill_viridis(option='magma',direction = 1) +
+  #scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  #stat_bin_2d(data=plot_data_comb_map %>%
+                #filter(source=='crb'),
+  #aes(x=start_lon,y=start_lat),color = "grey60",alpha=0.75, binwidth = c(0.1666,0.1666)) +
+  geom_sf(data=crb_stack,aes(fill=layer.3)) +
+  geom_polygon(data = reg, aes(x=long, y = lat, group = group),fill='grey60',colour='dark gray') +
+  geom_contour(data = atl,
+                aes(x=x, y=y, z=z),
+                breaks=c(-50,-100,-1000),
+                size=c(0.5),
+                colour="black",alpha=0.5) +
+  geom_sf(data=us_eez,alpha=0.25,fill='Green',size=1.2) +
+  #Setting the colors and breaks for the scale
+  coord_sf(xlim = lons, ylim = lats,crs="+proj=longlat +datum=WGS84") +
+    labs(x='Longitude',y='Latitude',fill='Total #\nweight (lbs)'#,
+      #title='Spatial distribution of Cooperative Research vs Observer records',
+      #subtitle='January 2010 - January 2019 for Trawl Gears'
+      ) + 
+  theme_bw() +
+  theme(legend.position = c(0.85, 0.25))
+
+study_fleet_t <- ggplot() +
+  #geom_sf(data=gf_closed_areas,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_2,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_3,alpha=0.25,fill='Green') +
+  #geom_raster(data=atl, aes(x=x, y=y,fill = z), interpolate = TRUE,alpha=0.5, show.legend = FALSE) +
+  #new_scale_fill() +
+  #scale_fill_viridis(option='magma',direction = 1) +
+  #scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  #stat_bin_2d(data=plot_data_comb_map %>%
+                #filter(source=='crb'),
+  #aes(x=start_lon,y=start_lat),color = "grey60",alpha=0.75, binwidth = c(0.1666,0.1666)) +
+  geom_sf(data=crb_stack,aes(fill=layer.4)) +
+  geom_polygon(data = reg, aes(x=long, y = lat, group = group),fill='grey60',colour='dark gray') +
+  geom_contour(data = atl,
+                aes(x=x, y=y, z=z),
+                breaks=c(-50,-100,-1000),
+                size=c(0.5),
+                colour="black",alpha=0.5) +
+  geom_sf(data=us_eez,alpha=0.25,fill='Green',size=1.2) +
+  #Setting the colors and breaks for the scale
+  coord_sf(xlim = lons, ylim = lats,crs="+proj=longlat +datum=WGS84") +
+    labs(x='Longitude',y='Latitude',fill='Total #\ntrips'#,
+      #title='Spatial distribution of Cooperative Research vs Observer records',
+      #subtitle='January 2010 - January 2019 for Trawl Gears'
+      ) + 
+  theme_bw() +
+  theme(legend.position = c(0.85, 0.25))
+
+library(patchwork)
+
+((study_fleet + observer) + plot_annotation(tag_levels = 'A')) / (study_fleet_t + study_fleet_w) + plot_annotation(tag_levels = 'A')
+
+
+```
+
+```{r}
+
+plot_data_comb_ves_gte_filter <- plot_data_comb_ves_gte %>% filter(GTE_DATA=='YES') %>% filter(YEAR>2009,YEAR<2021)
+
+coordinates(plot_data_comb_ves_gte_filter) <- c('start_lon','start_lat')
+plot_data_comb_ves_gte_filter @proj4string = CRS("+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0")
+
+crb_plot_data_comb_raster_efforts_gte <- rasterize(plot_data_comb_ves_gte_filter, r, 'haul_id', fun=function(x, ...) length(unique(x)))
+crb_plot_data_comb_raster_permits_gte <- rasterize(plot_data_comb_ves_gte_filter, r, 'permit', fun=function(x, ...) length(unique(x)))
+
+crb_stack_gte  <- stack(crb_plot_data_comb_raster_efforts_gte,crb_plot_data_comb_raster_permits_gte) %>% st_as_stars(values=layer) %>% st_as_sf() %>% filter(layer.2>3) %>% drop_na(layer.1)
+
+
+map_gte_2 <- ggplot() +
+  #geom_sf(data=gf_closed_areas,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_2,alpha=0.25,fill='Green') +
+  #geom_sf(data=gf_closed_areas_3,alpha=0.25,fill='Green') +
+  #geom_raster(data=atl, aes(x=x, y=y,fill = z), interpolate = TRUE,alpha=0.5, show.legend = FALSE) +
+  #new_scale_fill() +
+  #scale_fill_viridis(option='magma',direction = 1) +
+  #scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  #scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  scale_fill_gradientn(colours = parula(10),guide='colourbar',trans='log10') +
+  #stat_bin_2d(data=plot_data_comb %>%
+                #filter(source=='crb'),
+  #aes(x=start_lon,y=start_lat),color = "grey60",alpha=0.75, binwidth = c(0.1666,0.1666)) +
+  geom_sf(data=crb_stack_gte,aes(fill=layer.1)) +
+  geom_polygon(data = reg, aes(x=long, y = lat, group = group),fill='grey60',colour='white') +
+  
+  geom_contour(data = atl,
+                aes(x=x, y=y, z=z),
+                breaks=c(-50,-100,-1000),
+                size=c(0.5),
+                colour="black",alpha=0.5) +
+  geom_sf(data=us_eez,alpha=0.25,fill='Green',size=1.2) +
+  #Setting the colors and breaks for the scale
+  coord_sf(xlim = lons, ylim = lats,crs="+proj=longlat +datum=WGS84") +
+    labs(x='Longitude',y='Latitude',fill='Total #\nhauls'#,
+      #title='Spatial distribution of Cooperative Research vs Observer records',
+      #subtitle='January 2010 - January 2019 for Trawl Gears'
+      ) + 
+  theme_bw() +
+  theme(legend.position = c(0.85, 0.25))
+
+
+gte_trends <- plot_data_comb_ves_gte %>% filter(GTE_DATA=='YES') %>%
+  mutate(target=as.character(target)) %>%
+  mutate(target=case_when(target=='LOLIGO SQUID' ~ 'LONGFIN SQUID',target=='ILLEX'~'SHORTFIN SQUID',TRUE ~ target)) %>%
+  mutate(target=fct_lump_n(target,n=10)) %>%
+  drop_na(target) %>%
+  dplyr::select(haul_id,YEAR,target) %>% distinct() %>% group_by(YEAR,target) %>% tally() %>%
+  filter(YEAR>2009) %>% ggplot(aes(x=YEAR,y=n,colour=target)) + geom_point(size=2) + geom_line(size=1.2) +
+    labs(x='Year',y='Number of oceanographic records',colour='Target species') +
+  scale_x_continuous(breaks=c(2010:2020),limits=c(2010,2020)) + theme_bw() +
+  scale_colour_manual(values=as.vector(parula(11))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  geom_vline(xintercept = 2019.5,size=20,alpha=0.5)
+  
+
+map_gte_2 + gte_trends + plot_annotation(tag_levels = 'A')
+
+
+```
+
+```{r}
+#Looking at which vessels may have gone trip -> haul by haul
+
+report_sources <- trip_list %>% mutate(VESSEL_NAME=str_to_upper(VESSEL_NAME)) %>% dplyr::select(VESSEL_NAME,REPORT_SOURCE) %>% distinct() %>% group_by(VESSEL_NAME) %>% tally() %>%
+  filter(n > 1)
+
+trip_list %>% mutate(VESSEL_NAME=str_to_upper(VESSEL_NAME)) %>% 
+  filter(VESSEL_NAME %in% report_sources$VESSEL_NAME) %>%
+  mutate(YEAR=year(SAIL_DATE_LCL)) %>%
+  dplyr::select(YEAR,VESSEL_NAME,REPORT_SOURCE,PROGRAM_TYPE) %>% distinct() %>%
+  ggplot(aes(YEAR,y=REPORT_SOURCE,colour=REPORT_SOURCE,shape=PROGRAM_TYPE)) + geom_point(alpha=0.5) + facet_wrap(~VESSEL_NAME)
+
+
+```
+
+
