@@ -981,7 +981,7 @@ trip_list %>%  mutate(YEAR=year(SAIL_DATE_LCL)) %>%
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
-![](Figs/A%20figure%20of%20trip%20counts-1.png)<!-- -->
+![](Figs/A%20figure%20of%20trip%20counts-1.pdf)<!-- -->
 
 #Figure 3 The breakdown of Study Fleet number of vessels, trips, and
 hauls by target species through time. The trends through time for each
@@ -1106,7 +1106,7 @@ target_vessel_prop <- plot_data_comb_ves %>%
   plot_layout(guides = "collect") + plot_annotation(tag_levels = 'A') + theme(legend.position = 'bottom')
 ```
 
-![](Figs/Looking%20at%20the%20study%20fleet%20summaries%20by%20target%20species-1.png)<!-- -->
+![](Figs/Looking%20at%20the%20study%20fleet%20summaries%20by%20target%20species-1.pdf)<!-- -->
 
 # Figure 4
 
@@ -1151,7 +1151,7 @@ library(patchwork)
 a/b + plot_annotation(tag_levels = 'A')
 ```
 
-![](Figs/Plots%20comparing%20the%20number%20of%20records%20in%20the%20study%20fleet%20and%20observer%20programs-1.png)<!-- -->
+![](Figs/Plots%20comparing%20the%20number%20of%20records%20in%20the%20study%20fleet%20and%20observer%20programs-1.pdf)<!-- -->
 
 # Figure 5
 
@@ -1292,7 +1292,7 @@ study_fleet_t <- ggplot() +
 ((study_fleet + observer) + plot_annotation(tag_levels = 'A')) / (study_fleet_t + study_fleet_w) + plot_annotation(tag_levels = 'A')
 ```
 
-![](Figs/Making%20rasters%20of%20data%20and%20mapping%20out%20records-1.png)<!-- -->
+![](Figs/Making%20rasters%20of%20data%20and%20mapping%20out%20records-1.pdf)<!-- -->
 
 # Figure 6
 
@@ -1431,7 +1431,7 @@ dealer_sum %>% inner_join(.,study_fleet_sum) %>% mutate(prop=SUM_HAIL_AMOUNT_LB/
        axis.text.y.left = element_text(color = "#352A87"))
 ```
 
-![](Figs/Comparisons%20of%20study%20fleet%20landings%20to%20total%20landings-1.png)<!-- -->
+![](Figs/Comparisons%20of%20study%20fleet%20landings%20to%20total%20landings-1.pdf)<!-- -->
 
 #Figure 7 The trend in oceanographic records through time and across
 space. Panel A shows the density of sampling across space for all years
@@ -1491,7 +1491,7 @@ gte_trends <- plot_data_comb_ves_gte %>% filter(GTE_DATA=='YES',YEAR<2020) %>%
 map_gte_2 + gte_trends + plot_annotation(tag_levels = 'A')
 ```
 
-![](Figs/Makimh%20GTE%20plots-1.png)<!-- -->
+![](Figs/Makimh%20GTE%20plots-1.pdf)<!-- -->
 
 # Appendix C
 
@@ -1549,4 +1549,4 @@ participation_data %>% left_join(VESSEL_PORT) %>% filter(YEAR < 2021) %>%
                       high=as.vector(brewer.blues(3)[3]))
 ```
 
-![](Figs/Making%20plots%20of%20ind%20vessel%20participation-1.png)<!-- -->
+![](Figs/Making%20plots%20of%20ind%20vessel%20participation-1.pdf)<!-- -->

@@ -1,5 +1,5 @@
 ---
-title: "Study Fleet Manuscript Pull and Analysis"
+title: "Study Fleet Manuscript Analysis"
 author: "Andy Jones"
 date: Date & Time - `r format(Sys.time(), '%Y %B %d')`
 output: github_document
@@ -8,7 +8,7 @@ editor_options:
 ---
 
 ```{r global-options, include=FALSE}
-knitr::opts_chunk$set(fig.path='Figs/',echo=TRUE, warning=FALSE, message=FALSE)
+knitr::opts_chunk$set(fig.path='Figs/',echo=TRUE, warning=FALSE, message=FALSE,dev='pdf')
 
 ```
 

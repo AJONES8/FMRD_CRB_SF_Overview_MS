@@ -1,5 +1,5 @@
 ---
-title: "Study Fleet Manuscript Pull and Analysis"
+title: "Study Fleet Manuscript Pull"
 author: "Andy Jones"
 date: "07/07/2021"
 output: html_document
