@@ -99,7 +99,7 @@ fvtr_gear_codes <- dbGetQuery(con,"select * from FVTR.FVTR_GEAR_CODES")
 
 #Pulling vessel data
 vps_vessels <- dbGetQuery(con,"select * from PERMIT.VPS_VESSEL")
-vps_vessels_new <- dbGetQuery(con,"select * from PERMIT.VPS_VESSEL_NEW")
+#vps_vessels_new <- dbGetQuery(con,"select * from PERMIT.VPS_VESSEL_NEW")
 
 #Making my own version of the vessel data
 vessel_info <- vps_vessels %>% filter(AP_YEAR>2006) %>%
@@ -134,7 +134,7 @@ pulled_data <- trip_list %>%
 ```
 
 ##Making functions to convert the CRB lat/lon data
-Convertimg the decimal degree minutes format in the CRB data to decimal degrees.
+Converting the decimal degree minutes format in the CRB data to decimal degrees.
 
 ```{r Making functions to convert the CRB lat/lon data}
 #SOURCE FOR FUNCTIONS
@@ -195,7 +195,7 @@ Pulling the OB and ASM data tables for trip, haul, and catch data. This is just 
 ```{r Pulling the observer data}
 #Getting the Observer Data from 2007 on
 #getting gear codes
-obdbs_gear_codes <- dbGetQuery(con,"select * from obdbs.obgear")
+obdbs_gear_codes <- dbGetQuery(con.nova,"select * from obdbs.obgear")
 OBTRG <- dbGetQuery(con.nova,"select * from obdbs.obtrg")
 OBMESHSIZE <- dbGetQuery(con.nova,"select * from obdbs.OBMESHSIZE")
 OBOTGH <- dbGetQuery(con.nova,"select * from obdbs.OBOTGH")
@@ -462,51 +462,6 @@ combined_data <- rbind(pulled_data_cf_sum_sum_sub,ASM_OB_CATCH_SUB_edit_sum_sum_
 
 ```
 
-## Converting to SF Format
-Taking the GPS points (effort/haul beginning and end) and converting them to a line to calculated the length of the tow.
-This is unfortunately REALLY not efficient and takes awhile to convert
-
-```{r Converting to SF Format, fig.height=8, fig.width=13}
-#Converting the lat lon into distance and SF format
-#swept area
-#Making an sf formatted haul start
-effort.start <- combined_data %>% ungroup() %>% #filter(BSB_CPUE>0) %>%
-  mutate(TRIPID_EFFORT=paste(trip_id,haul_num,sep='_')) %>%
-  dplyr::select('TRIPID_EFFORT',LON='start_lon',LAT='start_lat') %>%
-  filter(LON > -80, LAT > 30, LAT < 45, LON < -60)
-
-#Making an sf formatted haul stop
-effort.end <- combined_data %>% ungroup() %>% #filter(BSB_CPUE>0) %>%
-  mutate(TRIPID_EFFORT=paste(trip_id,haul_num,sep='_')) %>%
-  dplyr::select('TRIPID_EFFORT',LON='end_lon',LAT='end_lat') %>%
-  filter(LON > -80, LAT > 30, LAT < 45, LON < -60)
-
-#calculating tow length & filtering out tows without two GPS points
-#This could be improved
-tow.coords.pre <- bind_rows(effort.start,effort.end) %>% 
-  as.tibble() %>%
-  drop_na(LAT,LON,TRIPID_EFFORT) %>%
-  group_by(TRIPID_EFFORT) %>% 
-  distinct() %>% 
-  mutate(n=n()) %>% filter(n==2) %>%
-  ungroup() %>%
-  mutate(LAT=as.numeric(LAT),LON=as.numeric(LON)) %>%
-  drop_na(LAT,LON,TRIPID_EFFORT) %>%
-  st_as_sf(coords=c('LON','LAT')) %>% #View()
-  dplyr::select(-n) %>%
-  group_by(TRIPID_EFFORT) %>% 
-  summarise(do_union = FALSE) %>%
-  st_set_crs("+init=epsg:4326") %>% 
-  st_transform(crs="+proj=longlat +datum=WGS84") %>%
-  ungroup()
-
-#Converting to multilinestring
-tow.coords <- tow.coords.pre %>% filter(st_geometry_type(.) %in% c('MULTIPOINT'))
-tow.coords <- tow.coords %>% st_cast(.,'LINESTRING')
-tow.coords <- tow.coords %>% mutate(tow_length=st_length(geometry))
-
-```
-
 ##Data polishing 2 (inspecting and weeding out co-sampled trips)
 Matching observer and cooperative research trips by permit and date, then comparing the total catch of haddock on a given trip between the two data sources.
 
@@ -516,8 +471,8 @@ Matching observer and cooperative research trips by permit and date, then compar
 #Putting together the other data
 plot_data <- combined_data %>% 
   mutate(TRIPID_EFFORT=paste(trip_id,haul_num,sep='_')) %>%
-  inner_join(.,tow.coords) %>%
-  filter(as.numeric(tow_length)<40000,as.numeric(tow_length)>100) %>%
+  #inner_join(.,tow.coords) %>%
+  #filter(as.numeric(tow_length)<40000,as.numeric(tow_length)>100) %>%
   mutate(YEAR=year(sail_date),
          MONTH=month(sail_date),
          YDAY=yday(sail_date),
@@ -537,12 +492,26 @@ plot_data_comb <- rbind(plot_data_single_rec,plot_data_more_rec)
 
 ```
 
-##Adding the wide catch elements
+# Adding vessel info
 
 ```{r}
 ##Adding vessel info
 #Adding vessel info
 plot_data_comb_ves <- plot_data_comb %>% left_join(.,vessel_info %>% mutate(VP_NUM=as.character(VP_NUM)),by=c("permit"="VP_NUM","YEAR"="AP_YEAR"))
+
+```
+
+# Pulling dealer data
+
+```{r}
+#Pulling dealer data
+dbGetQuery(con,"SET ROLE ALL")
+
+years <- c(2007:2020)
+cfders_spp <- NULL
+#Then dealer data
+for(i in 1:length(years)) {
+cfders_spp[[i]] <- dbGetQuery(con,paste("SELECT YEAR,NEGEAR,NESPP4,AREA,SPECIES_ITIS,SPPLNDLB FROM CFDBS.CFDERS",years[i],sep=''))}
 
 ```
 
