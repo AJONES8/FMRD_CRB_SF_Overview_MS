@@ -1,128 +1,7 @@
 Study Fleet Manuscript Analysis
 ================
 Andy Jones
-Date & Time - 2021 December 16
-
-##Loading packages Loading the many packages that are used somewhere in
-this script. This script has evolved to do many things and many of these
-are only need in one or two places.
-
-``` r
-#loading needed packages
-library(tidyverse)
-```
-
-    ## -- Attaching packages --------------------------------------- tidyverse 1.3.1 --
-
-    ## v ggplot2 3.3.5     v purrr   0.3.4
-    ## v tibble  3.1.6     v dplyr   1.0.7
-    ## v tidyr   1.1.4     v stringr 1.4.0
-    ## v readr   2.1.0     v forcats 0.5.1
-
-    ## -- Conflicts ------------------------------------------ tidyverse_conflicts() --
-    ## x dplyr::filter() masks stats::filter()
-    ## x dplyr::lag()    masks stats::lag()
-
-``` r
-library(lubridate)
-```
-
-    ## 
-    ## Attaching package: 'lubridate'
-
-    ## The following objects are masked from 'package:base':
-    ## 
-    ##     date, intersect, setdiff, union
-
-``` r
-library(MASS)
-```
-
-    ## 
-    ## Attaching package: 'MASS'
-
-    ## The following object is masked from 'package:dplyr':
-    ## 
-    ##     select
-
-``` r
-library(sf)
-```
-
-    ## Linking to GEOS 3.9.1, GDAL 3.2.1, PROJ 7.2.1
-
-``` r
-library(gt)
-library(pals)
-library(scales)
-```
-
-    ## 
-    ## Attaching package: 'scales'
-
-    ## The following object is masked from 'package:purrr':
-    ## 
-    ##     discard
-
-    ## The following object is masked from 'package:readr':
-    ## 
-    ##     col_factor
-
-``` r
-library(mapdata)
-```
-
-    ## Loading required package: maps
-
-    ## 
-    ## Attaching package: 'maps'
-
-    ## The following object is masked from 'package:purrr':
-    ## 
-    ##     map
-
-``` r
-library(patchwork)
-```
-
-    ## 
-    ## Attaching package: 'patchwork'
-
-    ## The following object is masked from 'package:MASS':
-    ## 
-    ##     area
-
-``` r
-library(ggnewscale)
-library(stars)
-```
-
-    ## Loading required package: abind
-
-``` r
-library(raster)
-```
-
-    ## Loading required package: sp
-
-    ## 
-    ## Attaching package: 'raster'
-
-    ## The following object is masked from 'package:MASS':
-    ## 
-    ##     select
-
-    ## The following object is masked from 'package:dplyr':
-    ## 
-    ##     select
-
-##Load pulled data from file
-
-``` r
-#Data saved as an RData file
-#Last pulled on 12/15/2021
-load("C:/Users/andrew.jones/Desktop/Study_Fleet_Manuscript.RData")
-```
+Date & Time - 2021 December 17
 
 Getting into the analysis with some summaries
 
@@ -143,26 +22,20 @@ trip_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(
 
 ves_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(YEAR,SOURCE,VESSEL_PERMIT_NUM) %>% distinct() %>% group_by(YEAR,SOURCE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n)
 
-effort_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(TRIP_ID,YEAR) %>% left_join(., crpp_effort %>% mutate(effort_id=paste(TRIP_ID,EFFORT_NUM))) %>% dplyr::select(YEAR,SOURCE,effort_id) %>% distinct() %>% group_by(YEAR,SOURCE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n) %>% drop_na(SOURCE)
-```
+effort_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(TRIP_ID,YEAR) %>% left_join(., crpp_effort %>% mutate(effort_id=paste(TRIP_ID,EFFORT_NUM)),by='TRIP_ID') %>% dplyr::select(YEAR,SOURCE,effort_id) %>% distinct() %>% group_by(YEAR,SOURCE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n) %>% drop_na(SOURCE)
 
-    ## Joining, by = "TRIP_ID"
-
-``` r
-gear_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(TRIP_ID,YEAR) %>% left_join(., crpp_effort %>% mutate(effort_id=paste(TRIP_ID,EFFORT_NUM))) %>% dplyr::select(YEAR,GC_GEAR_CODE,TRIP_ID) %>% distinct() %>% 
+gear_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(TRIP_ID,YEAR) %>% left_join(., crpp_effort %>% mutate(effort_id=paste(TRIP_ID,EFFORT_NUM)),by='TRIP_ID') %>% dplyr::select(YEAR,GC_GEAR_CODE,TRIP_ID) %>% distinct() %>% 
   mutate(GC_GEAR_CODE=fct_lump_n(GC_GEAR_CODE,n=1)) %>%
   group_by(YEAR,GC_GEAR_CODE) %>% tally() %>% pivot_wider(names_from = YEAR,values_from = n) %>% drop_na(GC_GEAR_CODE)
 ```
 
-    ## Joining, by = "TRIP_ID"
-
 ``` r
 #Making two tables from these summaries
-bind_rows(tibble(Metric='Number of Vessels',ves_counts),tibble(Metric='Number of Trips',trip_counts),tibble(Metric='Number of Efforts',effort_counts)) %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>% group_by(Metric) %>% gt() %>% tab_header(title = "Metrics of Study Fleet Participation", subtitle ="From 2007 - 2020")
+bind_rows(tibble(Metric='Number of Vessels',ves_counts),tibble(Metric='Number of Trips',trip_counts),tibble(Metric='Number of Efforts',effort_counts)) %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>% group_by(Metric) %>% gt() %>% tab_header(title = "Metrics of Study Fleet Participation", subtitle ="From 2007 - 2020") %>% as_raw_html(., inline_css=FALSE)
 ```
 
 <div id="cakhquzlaa" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
-<style>html {
+  <style>html {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
 
@@ -499,7 +372,7 @@ bind_rows(tibble(Metric='Number of Vessels',ves_counts),tibble(Metric='Number of
   font-size: 65%;
 }
 </style>
-<table class="gt_table">
+  <table class="gt_table">
   <thead class="gt_header">
     <tr>
       <th colspan="15" class="gt_heading gt_title gt_font_normal" style>Metrics of Study Fleet Participation</th>
@@ -648,11 +521,11 @@ gear_counts %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>%
   rename('Gear type'=GC_GEAR_CODE) %>%
   gt() %>% 
   tab_header(title = "Study Fleet Participation by Gear Type",
-             subtitle ="From 2007 - 2020")
+             subtitle ="From 2007 - 2020") %>% as_raw_html(., inline_css=FALSE)
 ```
 
 <div id="fyjuzhklop" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
-<style>html {
+  <style>html {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
 
@@ -989,7 +862,7 @@ gear_counts %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>%
   font-size: 65%;
 }
 </style>
-<table class="gt_table">
+  <table class="gt_table">
   <thead class="gt_header">
     <tr>
       <th colspan="15" class="gt_heading gt_title gt_font_normal" style>Study Fleet Participation by Gear Type</th>
@@ -1056,7 +929,21 @@ gear_counts %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>%
 
 # Figure 1
 
-###ADD IMAGE###
+A conceptual diagram of the data flow and purpose of the Study Fleet
+program. Starting with the reporting vessels and fishermen (yellow)
+information flows to the Science Center (purple and blue) where it is
+curated and developed into analytical products for science and
+management. These products are presented as part of the assessment
+process (darker green) and then communicated back to participating
+fishermen (light green). This cycle is simplified in many ways as
+iterative loops are likely to improve the products and assessments.
+
+``` r
+im <- load.image('C:/Users/andrew.jones/Desktop/FMRD_CRB_SF_Overview_MS/Analysis/images/Study_Fleet_MS_Figure_1.JPG')
+plot(im, axes=FALSE)
+```
+
+![](Figs/Loading%20figure%20image-1.png)<!-- -->
 
 # Figure 2
 
@@ -1436,7 +1323,7 @@ dealer_sum_2007 <- cfders_spp[[1]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2007 <- cfders_spp[[2]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1445,7 +1332,7 @@ dealer_sum_2007 <- cfders_spp[[2]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2008 <- cfders_spp[[3]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1454,7 +1341,7 @@ dealer_sum_2008 <- cfders_spp[[3]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2009 <- cfders_spp[[4]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1463,7 +1350,7 @@ dealer_sum_2009 <- cfders_spp[[4]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2010 <- cfders_spp[[1]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1472,7 +1359,7 @@ dealer_sum_2010 <- cfders_spp[[1]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2011 <- cfders_spp[[5]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1481,7 +1368,7 @@ dealer_sum_2011 <- cfders_spp[[5]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2012 <- cfders_spp[[6]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1490,7 +1377,7 @@ dealer_sum_2012 <- cfders_spp[[6]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2013 <- cfders_spp[[7]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1499,7 +1386,7 @@ dealer_sum_2013 <- cfders_spp[[7]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2014 <- cfders_spp[[8]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1508,7 +1395,7 @@ dealer_sum_2014 <- cfders_spp[[8]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2015 <- cfders_spp[[9]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1517,7 +1404,7 @@ dealer_sum_2015 <- cfders_spp[[9]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB)
 dealer_sum_2016 <- cfders_spp[[10]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1526,7 +1413,7 @@ dealer_sum_2016 <- cfders_spp[[10]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB
 dealer_sum_2017 <- cfders_spp[[11]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1535,7 +1422,7 @@ dealer_sum_2017 <- cfders_spp[[11]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB
 dealer_sum_2018 <- cfders_spp[[12]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1544,7 +1431,7 @@ dealer_sum_2018 <- cfders_spp[[12]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB
 dealer_sum_2019 <- cfders_spp[[13]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1553,7 +1440,7 @@ dealer_sum_2019 <- cfders_spp[[13]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB
 dealer_sum_2020 <- cfders_spp[[14]] %>% dplyr::select(SPECIES_ITIS,YEAR,SPPLNDLB) %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   mutate(YEAR=as.numeric(YEAR)) %>% group_by(YEAR,SPECIES_ITIS) %>% 
-  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE))
+  dplyr::summarise(SPPLNDLB=sum(SPPLNDLB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1568,7 +1455,7 @@ dealer_sum <- rbind(dealer_sum_2020,dealer_sum_2019,dealer_sum_2018,dealer_sum_2
 study_fleet_sum <- pulled_data_edit_cf %>%
   filter(SPECIES_ITIS %in% c('172735','082372','082521','169182','164744','172908','172877','164712')) %>%
   group_by(YEAR,SPECIES_ITIS) %>% sample_frac(0.5) %>%
-  dplyr::summarise(SUM_HAIL_AMOUNT_LB=sum(HAIL_AMOUNT_LB,na.rm=TRUE))
+  dplyr::summarise(SUM_HAIL_AMOUNT_LB=sum(HAIL_AMOUNT_LB,na.rm=TRUE)) 
 ```
 
     ## `summarise()` has grouped output by 'YEAR'. You can override using the `.groups` argument.
@@ -1601,7 +1488,7 @@ dealer_sum %>% inner_join(.,study_fleet_sum) %>% mutate(prop=SUM_HAIL_AMOUNT_LB/
        #axis.title.y.right = element_text(color="#FBCD2D"),
        axis.line.y.left = element_line(color = "#352A87"),
        axis.ticks.y.left = element_line(color = "#352A87"),
-       axis.text.y.left = element_text(color = "#352A87"))
+       axis.text.y.left = element_text(color = "#352A87")) 
 ```
 
     ## Joining, by = c("YEAR", "SPECIES_ITIS")
