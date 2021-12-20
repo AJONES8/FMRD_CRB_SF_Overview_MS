@@ -1,7 +1,7 @@
 Study Fleet Manuscript Analysis
 ================
 Andy Jones
-Date & Time - 2021 December 17
+Date & Time - 2021 December 20
 
 Getting into the analysis with some summaries
 
@@ -31,11 +31,14 @@ gear_counts <- crpp_trip %>% mutate(YEAR=year(SAIL_DATE_GMT)) %>% dplyr::select(
 
 ``` r
 #Making two tables from these summaries
-bind_rows(tibble(Metric='Number of Vessels',ves_counts),tibble(Metric='Number of Trips',trip_counts),tibble(Metric='Number of Efforts',effort_counts)) %>% dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>% group_by(Metric) %>% gt() %>% tab_header(title = "Metrics of Study Fleet Participation", subtitle ="From 2007 - 2020") %>% as_raw_html(., inline_css=FALSE)
+bind_rows(tibble(Metric='Number of Vessels',ves_counts),
+          tibble(Metric='Number of Trips',trip_counts),
+          tibble(Metric='Number of Efforts',effort_counts)) %>% 
+  dplyr::select(-`2006`,-`2021`) %>% replace(is.na(.), 0) %>% group_by(Metric) %>% gt() %>% tab_header(title = "Metrics of Study Fleet Participation", subtitle ="From 2007 - 2020")
 ```
 
 <div id="cakhquzlaa" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
-  <style>html {
+<style>html {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
 
@@ -372,7 +375,7 @@ bind_rows(tibble(Metric='Number of Vessels',ves_counts),tibble(Metric='Number of
   font-size: 65%;
 }
 </style>
-  <table class="gt_table">
+<table class="gt_table">
   <thead class="gt_header">
     <tr>
       <th colspan="15" class="gt_heading gt_title gt_font_normal" style>Metrics of Study Fleet Participation</th>
@@ -1477,11 +1480,11 @@ dealer_sum %>% inner_join(.,study_fleet_sum) %>% mutate(prop=SUM_HAIL_AMOUNT_LB/
   geom_line(aes(x=YEAR,y=prop,color='Prop. in SF'),colour='#352A87', size=1.2) +
   geom_point(aes(x=YEAR,y=SPPLNDLB/5,color='Total trend'),colour='#FBCD2D', size=3) +
   geom_line(aes(x=YEAR,y=SPPLNDLB/5,color='Total trend'),colour='#FBCD2D', size=1.2) +
-  labs(x='Year',y='Proportion of total species landings (closed)') +
+  labs(x='Year',y='Proportion of total species landings (Open)') +
   scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
   facet_wrap(~COMNAME) +
-  scale_y_continuous(sec.axis = sec_axis(~.*5, name = "Total landings trend (open)")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*5, name = "Total landings trend (Closed)")) +
   theme(axis.line.y.right = element_line(color = "#FBCD2D"),
        axis.ticks.y.right = element_line(color = "#FBCD2D"),
        #axis.text.y.right = element_text(color = "#FBCD2D"),
@@ -1601,12 +1604,12 @@ participation_data %>% left_join(VESSEL_PORT) %>% filter(YEAR < 2021) %>%
   ungroup() %>%
   mutate(Port=fct_lump(PPST,3)) %>%
   drop_na() %>%
-  ggplot(aes(x=YEAR,y=reorder(VESSEL_NAME,-min_year))) + 
+  ggplot(aes(x=YEAR,y=reorder(VESSEL_NUM,-min_year))) + 
   geom_tile(aes(fill=n),colour='Gray') +
   labs(x='Year',y='Vessels',fill='Number of trips') +
   scale_x_continuous(breaks=c(2007:2020)) + theme_bw() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.75, hjust=1),
-        axis.text.y = element_text(size=6),
+        axis.text.y = element_text(size=10),
         legend.position = 'bottom') +
   facet_wrap(~Port,scales='free_y') +
   scale_fill_gradient(low=as.vector(brewer.blues(3)[1]),
