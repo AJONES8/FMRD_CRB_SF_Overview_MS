@@ -1,18 +1,7 @@
 # Learning from the Study Fleet: maintenance of a large-scale reference fleet for northeast U.S. fisheries.
 
 *Authors:* 
-Andrew W. Jonesa*, Katie A. Burcharda, Anna M. Mercera, John J. Hoeya, Michael Morina, Giovanni Gianesinb, Jacob Wilsona, Calvin Alexandera, Brooke Lowmana, Debra Duarteb, David Goethelc, James Fordd, James Ruhlee, Rodman Sykes
-
-*Affiliation:* 
-- Northeast Fisheries Science Center, National Marine Fisheries Service, 28 Tarzwell Drive, Narragansett, RI 02882, USA.
-- Northeast Fisheries Science Center, National Marine Fisheries Service, 166 Water Street, Woods Hole, MA 02543, USA.
-- Fishing Vessel Ellen Diane, Hampton, NH 03801, USA
-- Fishing Vessel Lisa Ann III, Gloucester, MA 01930, USA
-- Fishing Vessel Darana R, Wanchese NC 27981, USA
-- Fishing Vessel Virginia Marise, Point Judith, RI, 02882, USA
-
-'*'Corresponding author.
-
+Andrew Jones, Katie Burchard, Anna Mercer, John Hoey, Michael Morin, Giovanni Gianesin, Jacob Wilson, Calvin Alexander, Brooke Lowman, Debra Duarte, David Goethel, James Ford, James Ruhle, Rodman Sykes, and Troy Sawyer
 
 ## Paper in development
 [Text for the manuscript can be found here](https://docs.google.com/document/d/1YDK3c8Nfrgd_alpOc7kiif1VO3wDthdvKf3CY3j4QTw/edit?usp=sharing).
